@@ -1066,7 +1066,9 @@ func competitionScoreHandler(c echo.Context) error {
 			}
 		}
 		if !found {
+			id, _ := dispenseID(ctx)
 			playerScoreRows = append(playerScoreRows, PlayerScoreRow{
+				ID:            id,
 				TenantID:      v.tenantID,
 				PlayerID:      playerID,
 				CompetitionID: competitionID,
@@ -1093,9 +1095,10 @@ func competitionScoreHandler(c echo.Context) error {
 		}
 
 		if len(playerScoreRows) > 0 {
+
 			if _, err := tx.NamedExecContext(
 				ctx,
-				"INSERT INTO player_score (tenant_id, player_id, competition_id, score, created_at) VALUES (:tenant_id, :player_id, :competition_id, :score, :created_at)",
+				"INSERT INTO player_score (id ,tenant_id, player_id, competition_id, score, created_at) VALUES (:id ,:tenant_id, :player_id, :competition_id, :score, :created_at)",
 				playerScoreRows,
 			); err != nil {
 				return fmt.Errorf(
