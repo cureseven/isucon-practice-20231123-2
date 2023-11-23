@@ -596,7 +596,15 @@ func billingReportByCompetition(ctx context.Context, tenantDB dbOrTx, tenantID i
 			BillingYen:        100*playerCount + 10*visitorCount,
 		}
 	}
-	return competitionCache[competitonID], nil
+	return &BillingReport{
+		CompetitionID:     comp.ID,
+		CompetitionTitle:  comp.Title,
+		PlayerCount:       playerCount,
+		VisitorCount:      visitorCount,
+		BillingPlayerYen:  100 * playerCount, // スコアを登録した参加者は100円
+		BillingVisitorYen: 10 * visitorCount, // ランキングを閲覧だけした(スコアを登録していない)参加者は10円
+		BillingYen:        100*playerCount + 10*visitorCount,
+	}, nil
 }
 
 type TenantWithBilling struct {
