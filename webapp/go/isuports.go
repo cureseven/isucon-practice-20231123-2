@@ -793,14 +793,11 @@ func playerDisqualifiedHandler(c echo.Context) error {
 			true, now, playerID, err,
 		)
 	}
-	p, err := retrievePlayer(ctx, adminDB, playerID)
-	if err != nil {
-		// 存在しないプレイヤー
-		if errors.Is(err, sql.ErrNoRows) {
-			return echo.NewHTTPError(http.StatusNotFound, "player not found")
-		}
-		return fmt.Errorf("error retrievePlayer: %w", err)
+	var p PlayerRow
+	if err := adminDB.GetContext(ctx, &p, "SELECT * FROM player WHERE id = ?", playerID); err != nil {
+		return fmt.Errorf("error Select player: id=%s, %w", playerID, err)
 	}
+	playerMap.Store(playerID, &p)
 
 	res := PlayerDisqualifiedHandlerResult{
 		Player: PlayerDetail{
