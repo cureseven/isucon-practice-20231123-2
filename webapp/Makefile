@@ -9,8 +9,8 @@ stop-services:
 
 start-services:
 	sudo systemctl start mysql
-	sleep 5
 	sudo systemctl start isuports.service
+	sleep 5
 	sudo systemctl start nginx
 
 truncate-logs:
