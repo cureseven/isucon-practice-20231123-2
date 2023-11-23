@@ -995,13 +995,13 @@ func competitionScoreHandler(c echo.Context) error {
 		}
 		playerID, scoreStr := row[0], row[1]
 		// 存在しない参加者が含まれている
-		if playerData[playerID] != nil {
+		if playerData[playerID] == nil {
 			return echo.NewHTTPError(
 				http.StatusBadRequest,
 				fmt.Sprintf("player not found: %s", playerID),
 			)
 		}
-		
+
 		var score int64
 		if score, err = strconv.ParseInt(scoreStr, 10, 64); err != nil {
 			return echo.NewHTTPError(
