@@ -774,37 +774,45 @@ func playersAddHandler(c echo.Context) error {
 		return fmt.Errorf("error c.FormParams: %w", err)
 	}
 	displayNames := params["display_name[]"]
+	// トランザクションの開始
+	tx, err := adminDB.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("error beginning transaction: %w", err)
+	}
 
+	// バルクインサートの準備
+	var valueStrings []string
+	var valueArgs []interface{}
+	now := time.Now().Unix()
 	pds := make([]PlayerDetail, 0, len(displayNames))
 	for _, displayName := range displayNames {
 		id, err := dispenseID(ctx)
 		if err != nil {
+			tx.Rollback()
 			return fmt.Errorf("error dispenseID: %w", err)
 		}
 
-		now := time.Now().Unix()
-		if _, err := adminDB.ExecContext(
-			ctx,
-			"INSERT INTO player (id, tenant_id, display_name, is_disqualified, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
-			id, v.tenantID, displayName, false, now, now,
-		); err != nil {
-			return fmt.Errorf(
-				"error Insert player at tenantDB: id=%s, displayName=%s, isDisqualified=%t, createdAt=%d, updatedAt=%d, %w",
-				id, displayName, false, now, now, err,
-			)
-		}
-		var p PlayerRow
-		if err := adminDB.GetContext(ctx, &p, "SELECT * FROM player WHERE id = ?", id); err != nil {
-			return fmt.Errorf("error Select player: id=%s, %w", id, err)
-		}
-		playerMap.Store(id, p)
+		valueStrings = append(valueStrings, "(?, ?, ?, ?, ?, ?)")
+		valueArgs = append(valueArgs, id, v.tenantID, displayName, false, now, now)
 		pds = append(pds, PlayerDetail{
-			ID:             p.ID,
-			DisplayName:    p.DisplayName,
-			IsDisqualified: p.IsDisqualified,
+			ID:             id,
+			DisplayName:    displayName,
+			IsDisqualified: false,
 		})
 	}
 
+	// バルクインサートの実行
+	stmt := fmt.Sprintf("INSERT INTO player (id, tenant_id, display_name, is_disqualified, created_at, updated_at) VALUES %s",
+		strings.Join(valueStrings, ","))
+	if _, err := tx.ExecContext(ctx, stmt, valueArgs...); err != nil {
+		tx.Rollback()
+		return fmt.Errorf("error executing bulk insert: %w", err)
+	}
+
+	// トランザクションのコミット
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("error committing transaction: %w", err)
+	}
 	res := PlayersAddHandlerResult{
 		Players: pds,
 	}
