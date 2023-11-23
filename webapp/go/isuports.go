@@ -335,12 +335,13 @@ type PlayerRow struct {
 
 // 参加者を取得する
 func retrievePlayer(ctx context.Context, tenantDB dbOrTx, id string) (*PlayerRow, error) {
-	p, ok := playerMap.Load(id)
+	v, ok := playerMap.Load(id)
 	if !ok {
 		return nil, sql.ErrNoRows
 	}
+	p := v.(PlayerRow)
 
-	return p.(*PlayerRow), nil
+	return &p, nil
 }
 
 // 参加者を認可する
