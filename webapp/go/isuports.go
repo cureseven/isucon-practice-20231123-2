@@ -1350,21 +1350,14 @@ func competitionRankingHandler(c echo.Context) error {
 	if err := tenantDB.SelectContext(
 		ctx,
 		&pss,
-		"SELECT * FROM player_score WHERE tenant_id = ? AND competition_id = ? ORDER BY row_num DESC",
+		"SELECT * FROM player_score AS ps INNER JOIN (SELECT ps2.tenant_id, ps2.competition_id, ps2.player_id, MAX(ps2.row_num) AS max_row_num FROM player_score AS ps2 WHERE ps2.tenant_id = ? AND ps2.competition_id = ? GROUP BY ps2.tenant_id, ps2.competition_id, ps2.player_id) AS t ON ps.tenant_id = t.tenant_id AND ps.competition_id = t.competition_id AND ps.player_id = t.player_id AND ps.row_num = t.max_row_num",
 		tenant.ID,
 		competitionID,
 	); err != nil {
 		return fmt.Errorf("error Select player_score: tenantID=%d, competitionID=%s, %w", tenant.ID, competitionID, err)
 	}
 	ranks := make([]CompetitionRank, 0, len(pss))
-	scoredPlayerSet := make(map[string]struct{}, len(pss))
 	for _, ps := range pss {
-		// player_scoreが同一player_id内ではrow_numの降順でソートされているので
-		// 現れたのが2回目以降のplayer_idはより大きいrow_numでスコアが出ているとみなせる
-		if _, ok := scoredPlayerSet[ps.PlayerID]; ok {
-			continue
-		}
-		scoredPlayerSet[ps.PlayerID] = struct{}{}
 		p, err := retrievePlayer(ctx, tenantDB, ps.PlayerID)
 		if err != nil {
 			return fmt.Errorf("error retrievePlayer: %w", err)
