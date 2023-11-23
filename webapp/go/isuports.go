@@ -746,11 +746,11 @@ func playersAddHandler(c echo.Context) error {
 				id, displayName, false, now, now, err,
 			)
 		}
-		p, err := retrievePlayer(ctx, adminDB, id)
-		if err != nil {
-			return fmt.Errorf("error retrievePlayer: %w", err)
+		var p PlayerRow
+		if err := adminDB.GetContext(ctx, &p, "SELECT * FROM player WHERE id = ?", id); err != nil {
+			return fmt.Errorf("error Select player: id=%s, %w", id, err)
 		}
-		playerMap.Store(p.ID, p)
+		playerMap.Store(id, &p)
 		pds = append(pds, PlayerDetail{
 			ID:             p.ID,
 			DisplayName:    p.DisplayName,
