@@ -756,6 +756,14 @@ func playersListHandler(c echo.Context) error {
 type PlayersAddHandlerResult struct {
 	Players []PlayerDetail `json:"players"`
 }
+type AddPlayer struct {
+	ID             string `db:"id"`
+	TenantID       int64  `db:"tenant_id"`
+	DisplayName    string `db:"display_name"`
+	IsDisqualified bool   `db:"is_disqualified"`
+	CreatedAt      int64  `db:"created_at"`
+	UpdatedAt      int64  `db:"updated_at"`
+}
 
 // テナント管理者向けAPI
 // GET /api/organizer/players/add
@@ -774,26 +782,23 @@ func playersAddHandler(c echo.Context) error {
 		return fmt.Errorf("error c.FormParams: %w", err)
 	}
 	displayNames := params["display_name[]"]
-	// トランザクションの開始
-	tx, err := adminDB.BeginTx(ctx, nil)
-	if err != nil {
-		return fmt.Errorf("error beginning transaction: %w", err)
-	}
 
-	// バルクインサートの準備
-	var valueStrings []string
-	var valueArgs []interface{}
-	now := time.Now().Unix()
 	pds := make([]PlayerDetail, 0, len(displayNames))
+	adds := make([]AddPlayer, 0, len(displayNames))
+	now := time.Now().Unix()
 	for _, displayName := range displayNames {
 		id, err := dispenseID(ctx)
 		if err != nil {
-			tx.Rollback()
 			return fmt.Errorf("error dispenseID: %w", err)
 		}
-
-		valueStrings = append(valueStrings, "(?, ?, ?, ?, ?, ?)")
-		valueArgs = append(valueArgs, id, v.tenantID, displayName, false, now, now)
+		adds = append(adds, AddPlayer{
+			ID:             id,
+			TenantID:       v.tenantID,
+			DisplayName:    displayName,
+			IsDisqualified: false,
+			CreatedAt:      now,
+			UpdatedAt:      now,
+		})
 		pds = append(pds, PlayerDetail{
 			ID:             id,
 			DisplayName:    displayName,
@@ -801,17 +806,15 @@ func playersAddHandler(c echo.Context) error {
 		})
 	}
 
-	// バルクインサートの実行
-	stmt := fmt.Sprintf("INSERT INTO player (id, tenant_id, display_name, is_disqualified, created_at, updated_at) VALUES %s",
-		strings.Join(valueStrings, ","))
-	if _, err := tx.ExecContext(ctx, stmt, valueArgs...); err != nil {
-		tx.Rollback()
-		return fmt.Errorf("error executing bulk insert: %w", err)
-	}
-
-	// トランザクションのコミット
-	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("error committing transaction: %w", err)
+	if len(adds) > 0 {
+		if _, err := adminDB.NamedExec(
+			"INSERT INTO player (id, tenant_id, display_name, is_disqualified, created_at, updated_at) VALUES (:id, :tenant_id, :display_name, :is_disqualified, :created_at, :updated_at)", adds,
+		); err != nil {
+			return fmt.Errorf(
+				"error Insert player at tenantDB: %w",
+				err,
+			)
+		}
 	}
 	res := PlayersAddHandlerResult{
 		Players: pds,
