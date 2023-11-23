@@ -938,7 +938,9 @@ func competitionScoreHandler(c echo.Context) error {
 	}
 
 	var rowNum int64
-	playerScoreRows := []PlayerScoreRow{}
+	playerScoreRows := make([]PlayerScoreRow, 0)
+	lastSeen := make(map[string]PlayerScoreRow)
+	var inserCSVCount int64
 	for {
 		rowNum++
 		row, err := r.Read()
@@ -973,8 +975,11 @@ func competitionScoreHandler(c echo.Context) error {
 		if err != nil {
 			return fmt.Errorf("error dispenseID: %w", err)
 		}
+		// IDの組み合わせをキーとする
+		key := fmt.Sprintf("%d_%s_%s", v.tenantID, playerID, competitionID)
 		now := time.Now().Unix()
-		playerScoreRows = append(playerScoreRows, PlayerScoreRow{
+		inserCSVCount++
+		lastSeen[key] = PlayerScoreRow{
 			ID:            id,
 			TenantID:      v.tenantID,
 			PlayerID:      playerID,
@@ -983,7 +988,11 @@ func competitionScoreHandler(c echo.Context) error {
 			RowNum:        rowNum,
 			CreatedAt:     now,
 			UpdatedAt:     now,
-		})
+		}
+	}
+	// マップに格納された最終行のみをplayerScoreRowsに追加
+	for _, psr := range lastSeen {
+		playerScoreRows = append(playerScoreRows, psr)
 	}
 
 	// トランザクションの開始
@@ -1026,7 +1035,7 @@ func competitionScoreHandler(c echo.Context) error {
 
 	return c.JSON(http.StatusOK, SuccessResult{
 		Status: true,
-		Data:   ScoreHandlerResult{Rows: int64(len(playerScoreRows))},
+		Data:   ScoreHandlerResult{Rows: inserCSVCount},
 	})
 }
 
