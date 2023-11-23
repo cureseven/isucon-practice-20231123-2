@@ -101,7 +101,8 @@ func updatePlayerMap() {
 	}
 
 	for _, p := range ps {
-		playerMap.Store(p.ID, &p)
+		player := p // プレイヤーのコピーを作成
+		playerMap.Store(player.ID, &player)
 	}
 }
 
