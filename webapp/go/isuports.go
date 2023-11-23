@@ -101,7 +101,7 @@ func updatePlayerMap() {
 	}
 
 	for _, p := range ps {
-		playerMap.Store(p.ID, &p)
+		playerMap.Store(p.ID, p)
 	}
 }
 
@@ -339,7 +339,9 @@ func retrievePlayer(ctx context.Context, tenantDB dbOrTx, id string) (*PlayerRow
 	if !ok {
 		return nil, sql.ErrNoRows
 	}
-	return v.(*PlayerRow), nil
+	p := v.(PlayerRow)
+
+	return &p, nil
 }
 
 // 参加者を認可する
@@ -749,7 +751,7 @@ func playersAddHandler(c echo.Context) error {
 		if err := adminDB.GetContext(ctx, &p, "SELECT * FROM player WHERE id = ?", id); err != nil {
 			return fmt.Errorf("error Select player: id=%s, %w", id, err)
 		}
-		playerMap.Store(id, &p)
+		playerMap.Store(id, p)
 		pds = append(pds, PlayerDetail{
 			ID:             p.ID,
 			DisplayName:    p.DisplayName,
@@ -800,7 +802,7 @@ func playerDisqualifiedHandler(c echo.Context) error {
 		}
 		return fmt.Errorf("error Select player: id=%s, %w", playerID, err)
 	}
-	playerMap.Store(playerID, &p)
+	playerMap.Store(playerID, p)
 
 	res := PlayerDisqualifiedHandlerResult{
 		Player: PlayerDetail{
