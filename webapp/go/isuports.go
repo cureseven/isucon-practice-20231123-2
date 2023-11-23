@@ -1081,11 +1081,11 @@ func competitionScoreHandler(c echo.Context) error {
 	if _, err := tx.ExecContext(
 		ctx,
 		"DELETE FROM player_score WHERE tenant_id = ? AND competition_id = ?",
-		tenantDB,
+		v.tenantID,
 		competitionID,
 	); err != nil {
 		tx.Rollback()
-		return fmt.Errorf("error Delete player_score: tenantID=%d, competitionID=%s, %w", tenantDB, competitionID, err)
+		return fmt.Errorf("error Delete player_score: tenantID=%d, competitionID=%s, %w", v.tenantID, competitionID, err)
 	}
 
 	// バルクインサートを準備
