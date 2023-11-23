@@ -1239,6 +1239,20 @@ SELECT * FROM (
 	args = append(args, competitionIDs...) // Add all competition IDs
 	args = append(args, p.ID)
 
+	// デバッグ情報を出力
+	fmt.Println("Debug Info＝＝＝＝＝＝＝＝＝＝＝＝＝＝＝＝＝＝＝")
+	fmt.Println("Query:", query)
+	fmt.Printf("Args: %v\n", args)
+
+	// クエリに args の値を当てはめた結果を出力（本当の実行ではなく、デバッグ用の表示）
+	for i, arg := range args {
+		placeholder := fmt.Sprintf("?%d", i+1)
+		query = strings.Replace(query, "?", placeholder, 1)
+		fmt.Printf("Arg %d: %v\n", i+1, arg)
+	}
+	fmt.Println("Query with placeholders replaced:")
+	fmt.Println(query)
+
 	// プリペアドステートメントの準備と実行
 	stmt, err := tenantDB.PrepareContext(ctx, query)
 	if err != nil {
