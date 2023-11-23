@@ -27,6 +27,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -45,7 +46,8 @@ var (
 	// 正しいテナント名の正規表現
 	tenantNameRegexp = regexp.MustCompile(`^[a-z][a-z0-9-]{0,61}[a-z0-9]$`)
 
-	adminDB *sqlx.DB
+	adminDB   *sqlx.DB
+	playerMap = sync.Map{}
 )
 
 // 環境変数を取得する、なければデフォルト値を返す
@@ -86,6 +88,21 @@ func SetCacheControlPrivate(next echo.HandlerFunc) echo.HandlerFunc {
 	return func(c echo.Context) error {
 		c.Response().Header().Set(echo.HeaderCacheControl, "private")
 		return next(c)
+	}
+}
+
+func updatePlayerMap() {
+	playerMap = sync.Map{}
+
+	var ps []PlayerRow
+	if err := adminDB.Select(&ps, "SELECT * FROM player"); err != nil {
+		fmt.Printf("failed to updatePlayerMap: %s\n", err.Error())
+		return
+	}
+
+	for _, p := range ps {
+		player := p // プレイヤーのコピーを作成
+		playerMap.Store(player.ID, &player)
 	}
 }
 
@@ -139,6 +156,8 @@ func Run() {
 	}
 	adminDB.SetMaxOpenConns(10)
 	defer adminDB.Close()
+
+	updatePlayerMap()
 
 	port := getEnv("SERVER_APP_PORT", "3000")
 	e.Logger.Infof("starting isuports server on : %s ...", port)
@@ -317,11 +336,11 @@ type PlayerRow struct {
 
 // 参加者を取得する
 func retrievePlayer(ctx context.Context, tenantDB dbOrTx, id string) (*PlayerRow, error) {
-	var p PlayerRow
-	if err := tenantDB.GetContext(ctx, &p, "SELECT * FROM player WHERE id = ?", id); err != nil {
-		return nil, fmt.Errorf("error Select player: id=%s, %w", id, err)
+	v, ok := playerMap.Load(id)
+	if !ok {
+		return nil, sql.ErrNoRows
 	}
-	return &p, nil
+	return v.(*PlayerRow), nil
 }
 
 // 参加者を認可する
@@ -727,10 +746,11 @@ func playersAddHandler(c echo.Context) error {
 				id, displayName, false, now, now, err,
 			)
 		}
-		p, err := retrievePlayer(ctx, adminDB, id)
-		if err != nil {
-			return fmt.Errorf("error retrievePlayer: %w", err)
+		var p PlayerRow
+		if err := adminDB.GetContext(ctx, &p, "SELECT * FROM player WHERE id = ?", id); err != nil {
+			return fmt.Errorf("error Select player: id=%s, %w", id, err)
 		}
+		playerMap.Store(id, &p)
 		pds = append(pds, PlayerDetail{
 			ID:             p.ID,
 			DisplayName:    p.DisplayName,
@@ -773,14 +793,15 @@ func playerDisqualifiedHandler(c echo.Context) error {
 			true, now, playerID, err,
 		)
 	}
-	p, err := retrievePlayer(ctx, adminDB, playerID)
-	if err != nil {
+	var p PlayerRow
+	if err := adminDB.GetContext(ctx, &p, "SELECT * FROM player WHERE id = ?", playerID); err != nil {
 		// 存在しないプレイヤー
 		if errors.Is(err, sql.ErrNoRows) {
 			return echo.NewHTTPError(http.StatusNotFound, "player not found")
 		}
-		return fmt.Errorf("error retrievePlayer: %w", err)
+		return fmt.Errorf("error Select player: id=%s, %w", playerID, err)
 	}
+	playerMap.Store(playerID, &p)
 
 	res := PlayerDisqualifiedHandlerResult{
 		Player: PlayerDetail{
@@ -1480,5 +1501,8 @@ func initializeHandler(c echo.Context) error {
 	res := InitializeHandlerResult{
 		Lang: "go",
 	}
+
+	updatePlayerMap()
+
 	return c.JSON(http.StatusOK, SuccessResult{Status: true, Data: res})
 }
