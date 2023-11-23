@@ -1228,6 +1228,7 @@ func playerHandler(c echo.Context) error {
 	}
 	defer fl.Close()
 	pss := make([]PlayerScoreRow, 0, len(cs))
+	var rn int64
 	query := `
 SELECT * FROM (
     SELECT *, ROW_NUMBER() OVER (PARTITION BY player_id, competition_id ORDER BY row_num DESC) as rn
@@ -1241,9 +1242,10 @@ SELECT * FROM (
 
 	// デバッグ情報を出力
 	fmt.Println("Debug Info＝＝＝＝＝＝＝＝＝＝＝＝＝＝＝＝＝＝＝")
-	fmt.Println("??????:", strings.Repeat(",?", len(cs)-1))
 	fmt.Println("Query:", query)
+	fmt.Printf("CompetitionIDs: %v\n", competitionIDs)
 	fmt.Printf("Args: %v\n", args)
+	fmt.Print("????:", strings.Repeat(",?", len(cs)-1))
 
 	// プリペアドステートメントの準備と実行
 	stmt, err := tenantDB.PrepareContext(ctx, query)
@@ -1261,7 +1263,7 @@ SELECT * FROM (
 	// 結果のマッピング
 	for rows.Next() {
 		var ps PlayerScoreRow
-		if err := rows.Scan(&ps /* all the fields */); err != nil {
+		if err := rows.Scan(&ps /* all the fields */, &rn); err != nil {
 			return fmt.Errorf("error scanning row: %w", err)
 		}
 		pss = append(pss, ps)
