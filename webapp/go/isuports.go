@@ -1233,7 +1233,7 @@ func playerHandler(c echo.Context) error {
 SELECT * FROM (
     SELECT *, ROW_NUMBER() OVER (PARTITION BY player_id, competition_id ORDER BY row_num DESC) as rn
     FROM player_score
-    WHERE tenant_id = ? AND competition_id IN (?` + strings.Repeat(",?", len(cs)-1) + `) AND player_id = ?
+    WHERE tenant_id = ? AND competition_id IN (?` + strings.Repeat(",?", len(competitionIDs)-1) + `) AND player_id = ?
 ) WHERE rn = 1
 `
 	args := []interface{}{v.tenantID}
@@ -1245,7 +1245,7 @@ SELECT * FROM (
 	fmt.Println("Query:", query)
 	fmt.Printf("CompetitionIDs: %v\n", competitionIDs)
 	fmt.Printf("Args: %v\n", args)
-	fmt.Print("????:", strings.Repeat(",?", len(cs)-1))
+	fmt.Print("????:", strings.Repeat(",?", len(competitionIDs)-1))
 
 	// プリペアドステートメントの準備と実行
 	stmt, err := tenantDB.PrepareContext(ctx, query)
