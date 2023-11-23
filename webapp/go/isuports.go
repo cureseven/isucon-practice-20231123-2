@@ -1227,14 +1227,9 @@ func playerHandler(c echo.Context) error {
 		return fmt.Errorf("error flockByTenantID: %w", err)
 	}
 	defer fl.Close()
-	pss := make([]PlayerScoreRow, 0, len(cs))
-	var rn int64
 	query := `
-SELECT * FROM (
-    SELECT *, ROW_NUMBER() OVER (PARTITION BY player_id, competition_id ORDER BY row_num DESC) as rn
-    FROM player_score
-    WHERE tenant_id = ? AND competition_id IN (?` + strings.Repeat(",?", len(competitionIDs)-1) + `) AND player_id = ?
-) WHERE rn = 1
+	SELECT * FROM player_score
+	WHERE tenant_id = ? AND competition_id IN (?` + strings.Repeat(",?", len(competitionIDs)-1) + `) AND player_id = ?
 `
 	args := []interface{}{v.tenantID}
 	args = append(args, competitionIDs...) // Add all competition IDs
@@ -1261,9 +1256,10 @@ SELECT * FROM (
 	defer rows.Close()
 
 	// 結果のマッピング
+	pss := make([]PlayerScoreRow, 0, len(cs))
 	for rows.Next() {
 		var ps PlayerScoreRow
-		if err := rows.Scan(&ps /* all the fields */, &rn); err != nil {
+		if err := rows.Scan(&ps /* all the fields */); err != nil {
 			return fmt.Errorf("error scanning row: %w", err)
 		}
 		pss = append(pss, ps)
