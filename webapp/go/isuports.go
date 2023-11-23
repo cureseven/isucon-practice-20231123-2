@@ -101,7 +101,7 @@ func updatePlayerMap() {
 	}
 
 	for _, p := range ps {
-		playerMap.Store(p.ID, p)
+		playerMap.Store(p.ID, &p)
 	}
 }
 
@@ -339,9 +339,7 @@ func retrievePlayer(ctx context.Context, tenantDB dbOrTx, id string) (*PlayerRow
 	if !ok {
 		return nil, sql.ErrNoRows
 	}
-	p := v.(PlayerRow)
-
-	return &p, nil
+	return v.(*PlayerRow), nil
 }
 
 // 参加者を認可する
