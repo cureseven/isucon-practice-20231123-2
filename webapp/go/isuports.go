@@ -378,6 +378,29 @@ func retrieveCompetition(ctx context.Context, tenantDB dbOrTx, id string) (*Comp
 	return &c, nil
 }
 
+// retrieveCompetitions retrieves multiple competitions based on provided IDs.
+func retrieveCompetitions(ctx context.Context, tenantDB *sqlx.DB, ids []string) ([]CompetitionRow, error) {
+	if len(ids) == 0 {
+		return nil, fmt.Errorf("no IDs provided")
+	}
+
+	// Using sqlx.In to handle the IN query with slice of ids
+	query, args, err := sqlx.In("SELECT * FROM competition WHERE id IN (?)", ids)
+	if err != nil {
+		return nil, fmt.Errorf("error preparing query: %v", err)
+	}
+
+	// sqlx.In returns queries with the '?' bindvar, we need to use Rebind to adapt to our database
+	query = tenantDB.Rebind(query)
+
+	var competitions []CompetitionRow
+	if err := tenantDB.SelectContext(ctx, &competitions, query, args...); err != nil {
+		return nil, fmt.Errorf("error selecting competitions: %v", err)
+	}
+
+	return competitions, nil
+}
+
 type PlayerScoreRow struct {
 	TenantID      int64  `db:"tenant_id"`
 	ID            string `db:"id"`
@@ -1177,11 +1200,33 @@ func playerHandler(c echo.Context) error {
 		return fmt.Errorf("error selecting player_scores: %w", err)
 	}
 
+	// まず、すべての CompetitionID を収集します。
+	var competitionIDs2 []string
+	for _, ps := range pss {
+		competitionIDs2 = append(competitionIDs2, ps.CompetitionID)
+	}
+
+	// 重複を削除します。
+	competitionIDs2 = unique(competitionIDs2)
+
+	// retrieveCompetitions を使って一度にすべての競技会情報を取得します。
+	competitions, err := retrieveCompetitions(ctx, adminDB, competitionIDs2)
+	if err != nil {
+		return fmt.Errorf("error retrieveCompetitions: %w", err)
+	}
+
+	// 競技会IDをキーとして競技会情報をマップに格納します。
+	compMap := make(map[string]CompetitionRow)
+	for _, comp := range competitions {
+		compMap[comp.ID] = comp
+	}
+
+	// PlayerScoreDetail スライスを構築します。
 	psds := make([]PlayerScoreDetail, 0, len(pss))
 	for _, ps := range pss {
-		comp, err := retrieveCompetition(ctx, adminDB, ps.CompetitionID)
-		if err != nil {
-			return fmt.Errorf("error retrieveCompetition: %w", err)
+		comp, exists := compMap[ps.CompetitionID]
+		if !exists {
+			return fmt.Errorf("competition not found for ID: %s", ps.CompetitionID)
 		}
 		psds = append(psds, PlayerScoreDetail{
 			CompetitionTitle: comp.Title,
@@ -1201,6 +1246,19 @@ func playerHandler(c echo.Context) error {
 		},
 	}
 	return c.JSON(http.StatusOK, res)
+}
+
+// unique は重複を削除するヘルパー関数です。
+func unique(strings []string) []string {
+	seen := make(map[string]struct{})
+	result := []string{}
+	for _, s := range strings {
+		if _, ok := seen[s]; !ok {
+			seen[s] = struct{}{}
+			result = append(result, s)
+		}
+	}
+	return result
 }
 
 type CompetitionRank struct {
