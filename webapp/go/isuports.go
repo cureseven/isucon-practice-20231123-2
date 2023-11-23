@@ -1123,25 +1123,27 @@ func playerHandler(c echo.Context) error {
 		return fmt.Errorf("error Select competition: %w", err)
 	}
 
-	pss := make([]PlayerScoreRow, 0, len(cs))
-	for _, c := range cs {
-		ps := PlayerScoreRow{}
-		if err := adminDB.GetContext(
-			ctx,
-			&ps,
-			// 最後にCSVに登場したスコアを採用する = row_numが一番大きいもの
-			"SELECT * FROM player_score WHERE tenant_id = ? AND competition_id = ? AND player_id = ? ORDER BY row_num DESC LIMIT 1",
-			v.tenantID,
-			c.ID,
-			p.ID,
-		); err != nil {
-			// 行がない = スコアが記録されてない
-			if errors.Is(err, sql.ErrNoRows) {
-				continue
-			}
-			return fmt.Errorf("error Select player_score: tenantID=%d, competitionID=%s, playerID=%s, %w", v.tenantID, c.ID, p.ID, err)
-		}
-		pss = append(pss, ps)
+	// player_scoreのデータを取得するためにcompetition_idのスライスを取得
+	competitionIDs := make([]interface{}, len(cs))
+	for i, c := range cs {
+		competitionIDs[i] = c.ID
+	}
+
+	// プレースホルダを生成
+	query, args, err := sqlx.In(
+		"SELECT * FROM player_score WHERE tenant_id = ? AND competition_id IN (?) AND player_id = ?",
+		v.tenantID, competitionIDs, p.ID,
+	)
+	if err != nil {
+		return fmt.Errorf("error creating query: %w", err)
+	}
+	// SQLxはプレースホルダをデータベースに適した形式に変換します
+	query = adminDB.Rebind(query)
+
+	// player_scoreのデータを取得
+	var pss []PlayerScoreRow
+	if err := adminDB.SelectContext(ctx, &pss, query, args...); err != nil {
+		return fmt.Errorf("error selecting player_scores: %w", err)
 	}
 
 	psds := make([]PlayerScoreDetail, 0, len(pss))
