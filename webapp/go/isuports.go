@@ -324,6 +324,24 @@ func retrievePlayer(ctx context.Context, tenantDB dbOrTx, id string) (*PlayerRow
 	return &p, nil
 }
 
+// 参加者を取得する
+func retrievePlayers(ctx context.Context, tenantDB *sqlx.DB, ids []string) ([]PlayerRow, error) {
+	var players []PlayerRow
+
+	query, args, err := sqlx.In("SELECT * FROM player WHERE id IN (?)", ids)
+	if err != nil {
+		return nil, fmt.Errorf("error preparing query: %w", err)
+	}
+
+	query = tenantDB.Rebind(query)
+
+	if err := tenantDB.SelectContext(ctx, &players, query, args...); err != nil {
+		return nil, fmt.Errorf("error selecting players: %w", err)
+	}
+
+	return players, nil
+}
+
 // 参加者を認可する
 // 参加者向けAPIで呼ばれる
 func authorizePlayer(ctx context.Context, tenantDB dbOrTx, id string) error {
@@ -941,6 +959,28 @@ func competitionScoreHandler(c echo.Context) error {
 	playerScoreRows := make([]PlayerScoreRow, 0)
 	lastSeen := make(map[string]PlayerScoreRow)
 	var inserCSVCount int64
+	playerIDs := []string{}
+	playerData := make(map[string][]string) // playerID をキーとしてスコアデータを保持する
+
+	// CSVから全プレイヤーIDを収集
+	for {
+		rowNum++
+		row, err := r.Read()
+		if err != nil {
+			if err == io.EOF {
+				break
+			}
+			return fmt.Errorf("error r.Read at rows: %w", err)
+		}
+		if len(row) != 2 {
+			return fmt.Errorf("row must have two columns: %#v", row)
+		}
+
+		playerID := row[0]
+		playerIDs = append(playerIDs, playerID)
+		playerData[playerID] = row // スコアデータを保持
+	}
+
 	for {
 		rowNum++
 		row, err := r.Read()
@@ -954,16 +994,14 @@ func competitionScoreHandler(c echo.Context) error {
 			return fmt.Errorf("row must have two columns: %#v", row)
 		}
 		playerID, scoreStr := row[0], row[1]
-		if _, err := retrievePlayer(ctx, adminDB, playerID); err != nil {
-			// 存在しない参加者が含まれている
-			if errors.Is(err, sql.ErrNoRows) {
-				return echo.NewHTTPError(
-					http.StatusBadRequest,
-					fmt.Sprintf("player not found: %s", playerID),
-				)
-			}
-			return fmt.Errorf("error retrievePlayer: %w", err)
+		// 存在しない参加者が含まれている
+		if playerData[playerID] != nil {
+			return echo.NewHTTPError(
+				http.StatusBadRequest,
+				fmt.Sprintf("player not found: %s", playerID),
+			)
 		}
+		
 		var score int64
 		if score, err = strconv.ParseInt(scoreStr, 10, 64); err != nil {
 			return echo.NewHTTPError(
