@@ -1075,6 +1075,7 @@ func competitionScoreHandler(c echo.Context) error {
 				CompetitionID: competitionID,
 				Score:         score,
 				CreatedAt:     now,
+				UpdatedAt:     now,
 			})
 		}
 		rowCount += 1
@@ -1099,7 +1100,7 @@ func competitionScoreHandler(c echo.Context) error {
 
 			if _, err := tx.NamedExecContext(
 				ctx,
-				"INSERT INTO player_score (id ,tenant_id, player_id,row_num, competition_id, score, created_at) VALUES (:id ,:tenant_id, :player_id, :row_num,:competition_id, :score, :created_at)",
+				"INSERT INTO player_score (id ,tenant_id, player_id,row_num, competition_id, score, created_at, updated_at) VALUES (:id ,:tenant_id, :player_id, :row_num,:competition_id, :score, :created_at, :updated_at)",
 				playerScoreRows,
 			); err != nil {
 				return fmt.Errorf(
