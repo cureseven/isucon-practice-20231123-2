@@ -1216,6 +1216,10 @@ func playerHandler(c echo.Context) error {
 	); err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return fmt.Errorf("error Select competition: %w", err)
 	}
+	competitionIDs := make([]interface{}, len(cs))
+	for i, c := range cs {
+		competitionIDs[i] = c.ID
+	}
 
 	// player_scoreを読んでいるときに更新が走ると不整合が起こるのでロックを取得する
 	fl, err := flockByTenantID(v.tenantID)
@@ -1224,24 +1228,40 @@ func playerHandler(c echo.Context) error {
 	}
 	defer fl.Close()
 	pss := make([]PlayerScoreRow, 0, len(cs))
-	for _, c := range cs {
-		ps := PlayerScoreRow{}
-		if err := tenantDB.GetContext(
-			ctx,
-			&ps,
-			// 最後にCSVに登場したスコアを採用する = row_numが一番大きいもの
-			"SELECT * FROM player_score WHERE tenant_id = ? AND competition_id = ? AND player_id = ? ORDER BY row_num DESC LIMIT 1",
-			v.tenantID,
-			c.ID,
-			p.ID,
-		); err != nil {
-			// 行がない = スコアが記録されてない
-			if errors.Is(err, sql.ErrNoRows) {
-				continue
-			}
-			return fmt.Errorf("error Select player_score: tenantID=%d, competitionID=%s, playerID=%s, %w", v.tenantID, c.ID, p.ID, err)
+	query := `
+SELECT * FROM (
+    SELECT *, ROW_NUMBER() OVER (PARTITION BY player_id, competition_id ORDER BY row_num DESC) as rn
+    FROM player_score
+    WHERE tenant_id = ? AND competition_id IN (?` + strings.Repeat(",?", len(cs)-1) + `) AND player_id = ?
+) WHERE rn = 1
+`
+	args := []interface{}{v.tenantID}
+	args = append(args, competitionIDs...) // Add all competition IDs
+	args = append(args, p.ID)
+
+	// プリペアドステートメントの準備と実行
+	stmt, err := tenantDB.PrepareContext(ctx, query)
+	if err != nil {
+		return fmt.Errorf("error preparing statement: %w", err)
+	}
+	defer stmt.Close()
+
+	rows, err := stmt.QueryContext(ctx, args...)
+	if err != nil {
+		return fmt.Errorf("error executing query: %w", err)
+	}
+	defer rows.Close()
+
+	// 結果のマッピング
+	for rows.Next() {
+		var ps PlayerScoreRow
+		if err := rows.Scan(&ps /* all the fields */); err != nil {
+			return fmt.Errorf("error scanning row: %w", err)
 		}
 		pss = append(pss, ps)
+	}
+	if err = rows.Err(); err != nil {
+		return fmt.Errorf("error iterating rows: %w", err)
 	}
 
 	psds := make([]PlayerScoreDetail, 0, len(pss))
