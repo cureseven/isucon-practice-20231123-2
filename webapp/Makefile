@@ -22,6 +22,8 @@ truncate-logs:
 
 bench:
 	ssh isucon-bench "cd ~/bench && ./bench -target-addr isucon-s1:443"
+kataribe:
+	cd ~/ && sudo cat /var/log/nginx/access.log | ./kataribe
 
 pprof: TIME=60
 pprof: PROF_FILE=~/pprof.samples.$(shell TZ=Asia/Tokyo date +"%H%M").$(shell git rev-parse HEAD | cut -c 1-8).pb.gz
