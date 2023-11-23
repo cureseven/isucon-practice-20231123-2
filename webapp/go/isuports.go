@@ -611,7 +611,7 @@ func tenantsBillingHandler(c echo.Context) error {
 			if err := adminDB.SelectContext(
 				ctx,
 				&cs,
-				"SELECT * FROM competition WHERE tenant_id=?",
+				"SELECT * FROM competition WHERE tenant_id=? AND finished_at IS NOT NULL",
 				t.ID,
 			); err != nil {
 				return fmt.Errorf("failed to Select competition: %w", err)
