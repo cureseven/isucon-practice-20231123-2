@@ -1122,9 +1122,9 @@ func playerHandler(c echo.Context) error {
 	); err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return fmt.Errorf("error Select competition: %w", err)
 	}
-	competitionIDs := make([]interface{}, len(cs))
+	competitionIDs := []string{}
 	for i, c := range cs {
-		competitionIDs[i] = c.ID
+		competitionIDs[i] = string(c.ID)
 	}
 
 	// player_scoreを読んでいるときに更新が走ると不整合が起こるのでロックを取得する
@@ -1138,7 +1138,7 @@ func playerHandler(c echo.Context) error {
 	WHERE tenant_id = ? AND competition_id IN (?` + strings.Repeat(",?", len(competitionIDs)-1) + `) AND player_id = ?
 `
 	args := []interface{}{v.tenantID}
-	args = append(args, competitionIDs...) // Add all competition IDs
+	args = append(args, competitionIDs) // Add all competition IDs
 	args = append(args, playerID)
 
 	// デバッグ情報を出力
