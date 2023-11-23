@@ -6,18 +6,7 @@ import (
 	"encoding/csv"
 	"errors"
 	"fmt"
-	"io"
-	"net/http"
-	"os"
-	"os/exec"
-	"path/filepath"
-	"reflect"
-	"regexp"
-	"sort"
-	"strconv"
-	"strings"
-	"time"
-
+	"github.com/felixge/fgprof"
 	"github.com/go-sql-driver/mysql"
 	"github.com/gofrs/flock"
 	"github.com/jmoiron/sqlx"
@@ -27,6 +16,18 @@ import (
 	"github.com/lestrrat-go/jwx/v2/jwa"
 	"github.com/lestrrat-go/jwx/v2/jwk"
 	"github.com/lestrrat-go/jwx/v2/jwt"
+	"io"
+	"net/http"
+	_ "net/http/pprof"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"reflect"
+	"regexp"
+	"sort"
+	"strconv"
+	"strings"
+	"time"
 )
 
 const (
@@ -136,6 +137,10 @@ func Run() {
 	e := echo.New()
 	e.Debug = true
 	e.Logger.SetLevel(log.DEBUG)
+	http.DefaultServeMux.Handle("/debug/fgprof", fgprof.Handler())
+	go func() {
+		fmt.Println(http.ListenAndServe(":6060", nil))
+	}()
 
 	var (
 		sqlLogger io.Closer
