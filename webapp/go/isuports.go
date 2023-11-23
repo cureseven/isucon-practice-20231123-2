@@ -939,7 +939,7 @@ func competitionScoreHandler(c echo.Context) error {
 	var rowNum int64
 	playerScoreRows := make([]PlayerScoreRow, 0)
 	lastSeen := make(map[string]PlayerScoreRow)
-
+	var inserCSVCount int64
 	for {
 		rowNum++
 		row, err := r.Read()
@@ -977,6 +977,7 @@ func competitionScoreHandler(c echo.Context) error {
 		// IDの組み合わせをキーとする
 		key := fmt.Sprintf("%d_%s_%s", v.tenantID, playerID, competitionID)
 		now := time.Now().Unix()
+		inserCSVCount++
 		lastSeen[key] = PlayerScoreRow{
 			ID:            id,
 			TenantID:      v.tenantID,
@@ -1033,7 +1034,7 @@ func competitionScoreHandler(c echo.Context) error {
 
 	return c.JSON(http.StatusOK, SuccessResult{
 		Status: true,
-		Data:   ScoreHandlerResult{Rows: int64(len(lastSeen))},
+		Data:   ScoreHandlerResult{Rows: inserCSVCount},
 	})
 }
 
