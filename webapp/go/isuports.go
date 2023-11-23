@@ -370,10 +370,9 @@ type CompetitionRow struct {
 	UpdatedAt  int64         `db:"updated_at"`
 }
 
-// 大会を取得する
-func retrieveCompetition(ctx context.Context, tenantDB dbOrTx, id string) (*CompetitionRow, error) {
+func retrieveCompetition(ctx context.Context, db dbOrTx, tenantID int64, id string) (*CompetitionRow, error) {
 	var c CompetitionRow
-	if err := tenantDB.GetContext(ctx, &c, "SELECT * FROM competition WHERE id = ?", id); err != nil {
+	if err := db.GetContext(ctx, &c, "SELECT * FROM competition WHERE id = ? AND tenant_id = ?", id, tenantID); err != nil {
 		return nil, fmt.Errorf("error Select competition: id=%s, %w", id, err)
 	}
 	return &c, nil
@@ -532,7 +531,7 @@ func billingReportByCompetition(ctx context.Context, tenantDB dbOrTx, tenantID i
 		return report, nil
 	}
 
-	comp, err := retrieveCompetition(ctx, tenantDB, competitonID)
+	comp, err := retrieveCompetition(ctx, tenantDB, tenantID, competitonID)
 	if err != nil {
 		return nil, fmt.Errorf("error retrieveCompetition: %w", err)
 	}
@@ -937,7 +936,7 @@ func competitionFinishHandler(c echo.Context) error {
 	if id == "" {
 		return echo.NewHTTPError(http.StatusBadRequest, "competition_id required")
 	}
-	_, err = retrieveCompetition(ctx, adminDB, id)
+	_, err = retrieveCompetition(ctx, adminDB, v.tenantID, id)
 	if err != nil {
 		// 存在しない大会
 		if errors.Is(err, sql.ErrNoRows) {
@@ -977,17 +976,11 @@ func competitionScoreHandler(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusForbidden, "role organizer required")
 	}
 
-	//tenantDB, err := connectToTenantDB(v.tenantID)
-	//if err != nil {
-	//	return err
-	//}
-	//defer tenantDB.Close()
-
 	competitionID := c.Param("competition_id")
 	if competitionID == "" {
 		return echo.NewHTTPError(http.StatusBadRequest, "competition_id required")
 	}
-	comp, err := retrieveCompetition(ctx, adminDB, competitionID)
+	comp, err := retrieveCompetition(ctx, adminDB, v.tenantID, competitionID)
 	if err != nil {
 		// 存在しない大会
 		if errors.Is(err, sql.ErrNoRows) {
@@ -1349,7 +1342,7 @@ func competitionRankingHandler(c echo.Context) error {
 	}
 
 	// 大会の存在確認
-	competition, err := retrieveCompetition(ctx, adminDB, competitionID)
+	competition, err := retrieveCompetition(ctx, adminDB, v.tenantID, competitionID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return echo.NewHTTPError(http.StatusNotFound, "competition not found")
